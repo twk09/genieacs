@@ -1,0 +1,9 @@
+{
+  "metrics": [
+    {
+      "name": "integration.load",
+      "path": "Device.DeviceInfo.MemoryStatus.Free",
+      "unit": "MiB"
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 import { Document } from "mongodb";
-import { collections, ensureKpiCollections } from "./db/db.ts";
+import {
+  collections,
+  ensureKpiCollections,
+  supportsAdvancedKpiRollup,
+} from "./db/db.ts";
 import * as cache from "./cache.ts";
 import * as config from "./config.ts";
 import * as logger from "./logger.ts";
@@ -23,6 +27,29 @@ const MAX_RATE_GAP = 30 * 60 * 1000;
 const MAX_DOCS = 400000;
 const RAW_MAX_SPAN = 3 * 24 * HOUR;
 const HOURLY_MAX_SPAN = 60 * 24 * HOUR;
+
+interface HourAccumulator {
+  _id: KpiHourly["_id"];
+  device: string;
+  metric: string;
+  instance: string;
+  hour: Date;
+  band: string;
+  kind: "gauge" | "counter";
+  count: number;
+  min: number;
+  max: number;
+  sum: number;
+  first: number;
+  last: number;
+  increase: number;
+}
+
+export function dateBucketExpression(field: string, size: number): Document {
+  return {
+    $subtract: [field, { $mod: [{ $toLong: field }, size] }],
+  };
+}
 
 export interface KpiSeries {
   metric: string;
@@ -93,14 +120,138 @@ export async function rollupHourly(now = Date.now()): Promise<void> {
 
     while (start < end) {
       const to = Math.min(end, start + MAX_ROLLUP_HOURS * HOUR);
-      await collections.kpi
-        .aggregate(hourlyPipeline(start, to), { allowDiskUse: true })
-        .toArray();
+      if (supportsAdvancedKpiRollup) {
+        await collections.kpi
+          .aggregate(hourlyPipeline(start, to), { allowDiskUse: true })
+          .toArray();
+      } else {
+        await rollupHourlyCompatible(start, to);
+      }
       start = to;
       await cache.set(WATERMARK_KEY, String(start), 10 * 365 * 24 * 3600);
     }
   } finally {
     await releaseLock(ROLLUP_LOCK, token).catch(() => null);
+  }
+}
+
+export async function rollupHourlyCompatible(
+  from: number,
+  to: number,
+): Promise<void> {
+  const cursor = collections.kpi
+    .find({
+      ts: {
+        $gte: new Date(from - PREVIOUS_SAMPLE_WINDOW),
+        $lt: new Date(to),
+      },
+    })
+    .sort({
+      "meta.device": 1,
+      "meta.metric": 1,
+      "meta.instance": 1,
+      ts: 1,
+      "meta.band": 1,
+      "meta.kind": 1,
+      _id: 1,
+    });
+
+  let currentSeries = "";
+  let currentHour: number | undefined;
+  let current: HourAccumulator | undefined;
+  const previous = new Map<string, { value: number }>();
+  let batch: KpiHourly[] = [];
+
+  const writeBatch = async (): Promise<void> => {
+    if (!batch.length) return;
+    await collections.kpiHourly.bulkWrite(
+      batch.map((hourly) => ({
+        replaceOne: {
+          filter: { _id: hourly._id },
+          replacement: hourly,
+          upsert: true,
+        },
+      })),
+      { ordered: false },
+    );
+    batch = [];
+  };
+
+  const flush = async (): Promise<void> => {
+    if (!current) return;
+    const { sum, increase, ...hourly } = current;
+    const record: KpiHourly = {
+      ...hourly,
+      avg: sum / current.count,
+    };
+    if (record.kind === "counter") record.increase = increase;
+    else delete record.increase;
+    batch.push(record);
+    current = undefined;
+    if (batch.length >= 500) await writeBatch();
+  };
+
+  try {
+    for await (const point of cursor) {
+      const { device, metric, instance, band, kind } = point.meta;
+      const series = JSON.stringify([device, metric, instance]);
+      if (series !== currentSeries) {
+        await flush();
+        currentSeries = series;
+        currentHour = undefined;
+        previous.clear();
+      }
+
+      const metaKey = JSON.stringify([device, metric, instance, band, kind]);
+      const previousPoint = previous.get(metaKey);
+      const timestamp = point.ts.getTime();
+      previous.set(metaKey, { value: point.value });
+      if (timestamp < from) continue;
+
+      const hour = Math.floor(timestamp / HOUR) * HOUR;
+      if (hour !== currentHour) {
+        await flush();
+        currentHour = hour;
+        current = {
+          _id: { device, metric, instance, hour: new Date(hour) },
+          device,
+          metric,
+          instance,
+          hour: new Date(hour),
+          band,
+          kind,
+          count: 0,
+          min: point.value,
+          max: point.value,
+          sum: 0,
+          first: point.value,
+          last: point.value,
+          increase: 0,
+        };
+      }
+
+      const accumulator = current;
+      if (!accumulator) throw new Error("KPI hour accumulator is missing");
+      accumulator.band = band;
+      accumulator.kind = kind;
+      accumulator.count++;
+      accumulator.min = Math.min(accumulator.min, point.value);
+      accumulator.max = Math.max(accumulator.max, point.value);
+      accumulator.sum += point.value;
+      accumulator.last = point.value;
+      if (
+        kind === "counter" &&
+        previousPoint &&
+        point.value >= previousPoint.value
+      ) {
+        accumulator.increase += point.value - previousPoint.value;
+      }
+    }
+
+    await flush();
+    await writeBatch();
+  } finally {
+    await cursor.close();
   }
 }
 
@@ -147,7 +298,7 @@ export function hourlyPipeline(from: number, to: number): Document[] {
           device: "$meta.device",
           metric: "$meta.metric",
           instance: "$meta.instance",
-          hour: { $dateTrunc: { date: "$ts", unit: "hour" } },
+          hour: dateBucketExpression("$ts", HOUR),
         },
         band: { $last: "$meta.band" },
         kind: { $last: "$meta.kind" },
@@ -312,7 +463,7 @@ export async function queryKpi(
           _id: {
             metric: "$metric",
             instance: "$instance",
-            day: { $dateTrunc: { date: "$hour", unit: "day" } },
+            day: dateBucketExpression("$hour", 24 * HOUR),
           },
           band: { $last: "$band" },
           kind: { $last: "$kind" },
@@ -405,6 +556,12 @@ export async function queryFleetKpis(
       ? "hour"
       : "day";
   const binSize = raw ? (span <= 6 * HOUR ? 5 : 15) : 1;
+  const bucketSize =
+    unit === "minute"
+      ? binSize * 60 * 1000
+      : unit === "hour"
+        ? HOUR
+        : 24 * HOUR;
   const source = raw ? collections.kpi : collections.kpiHourly;
   const timeField = raw ? "ts" : "hour";
   const deviceField = raw ? "$meta.device" : "$device";
@@ -441,13 +598,7 @@ export async function queryFleetKpis(
                 _id: {
                   productClass: "$deviceInfo.productClass",
                   device: deviceField,
-                  bucket: {
-                    $dateTrunc: {
-                      date: `$${timeField}`,
-                      unit,
-                      binSize,
-                    },
-                  },
+                  bucket: dateBucketExpression(`$${timeField}`, bucketSize),
                 },
                 deviceValue: { $avg: valueField },
               },

@@ -2,7 +2,9 @@ import {
   MongoClient,
   MongoServerError,
   Collection,
+  CollectionInfo,
   GridFSBucket,
+  Document,
 } from "mongodb";
 import { get } from "../config.ts";
 import * as MongoTypes from "./types.ts";
@@ -33,11 +35,18 @@ export const collections = {
 };
 
 let clientPromise: Promise<MongoClient>;
+export let maxWireVersion = 0;
+export let supportsTimeSeries = false;
+export let supportsAdvancedKpiRollup = false;
 
 export async function connect(): Promise<void> {
   clientPromise = MongoClient.connect("" + get("MONGODB_CONNECTION_URL"));
 
   const client = await clientPromise;
+  const handshake = await client.db().admin().command({ isMaster: 1 });
+  maxWireVersion = handshake.maxWireVersion as number;
+  supportsTimeSeries = maxWireVersion >= 13;
+  supportsAdvancedKpiRollup = maxWireVersion >= 14;
   const db = client.db();
 
   collections.tasks = db.collection("tasks");
@@ -75,6 +84,21 @@ export async function disconnect(): Promise<void> {
   if (clientPromise != null) await (await clientPromise).close();
 }
 
+async function ensureTtlIndex<T extends Document>(
+  collection: Collection<T>,
+  field: string,
+  ttl: number,
+): Promise<void> {
+  const indexes = await collection.listIndexes().toArray();
+  const index = indexes.find(
+    (i) => i.key[field] === 1 && Object.keys(i.key).length === 1,
+  );
+
+  if (index?.expireAfterSeconds === ttl) return;
+  if (index) await collection.dropIndex(index.name);
+  await collection.createIndex({ [field]: 1 }, { expireAfterSeconds: ttl });
+}
+
 // MongoDB error codes: 48 NamespaceExists, 85 IndexOptionsConflict, 86 IndexKeySpecsConflict
 export async function ensureKpiCollections(
   rawTtl: number,
@@ -82,36 +106,35 @@ export async function ensureKpiCollections(
 ): Promise<void> {
   const db = (await clientPromise).db();
 
-  const existing = await db.listCollections({ name: "kpi" }).toArray();
-  if (existing.length) {
-    await db.command({ collMod: "kpi", expireAfterSeconds: rawTtl });
-  } else {
+  let existing = await db.listCollections({ name: "kpi" }).toArray();
+  if (!existing.length) {
     try {
-      await db.createCollection("kpi", {
-        timeseries: {
-          timeField: "ts",
-          metaField: "meta",
-          granularity: "minutes",
-        },
-        expireAfterSeconds: rawTtl,
-      });
+      if (supportsTimeSeries) {
+        await db.createCollection("kpi", {
+          timeseries: {
+            timeField: "ts",
+            metaField: "meta",
+            granularity: "minutes",
+          },
+          expireAfterSeconds: rawTtl,
+        });
+      } else {
+        await db.createCollection("kpi");
+      }
     } catch (err) {
       if (!(err instanceof MongoServerError) || err.code !== 48) throw err;
     }
+    existing = await db.listCollections({ name: "kpi" }).toArray();
+  }
+
+  const kpiCollection = existing[0] as CollectionInfo | undefined;
+  if (kpiCollection?.options?.timeseries) {
+    if (kpiCollection.options.expireAfterSeconds !== rawTtl)
+      await db.command({ collMod: "kpi", expireAfterSeconds: rawTtl });
+  } else {
+    await ensureTtlIndex(collections.kpi, "ts", rawTtl);
   }
 
   await collections.kpiHourly.createIndex({ device: 1, metric: 1, hour: 1 });
-  try {
-    await collections.kpiHourly.createIndex(
-      { hour: 1 },
-      { expireAfterSeconds: hourlyTtl },
-    );
-  } catch (err) {
-    if (!(err instanceof MongoServerError)) throw err;
-    if (err.code !== 85 && err.code !== 86) throw err;
-    await db.command({
-      collMod: "kpiHourly",
-      index: { keyPattern: { hour: 1 }, expireAfterSeconds: hourlyTtl },
-    });
-  }
+  await ensureTtlIndex(collections.kpiHourly, "hour", hourlyTtl);
 }

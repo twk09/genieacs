@@ -6,6 +6,7 @@ import VersionedMap from "../lib/versioned-map.ts";
 import * as device from "../lib/device.ts";
 import { Attributes, DeviceData } from "../lib/types.ts";
 import { extractPoints, parseMetrics } from "../lib/kpi.ts";
+import { dateBucketExpression } from "../lib/kpi-store.ts";
 
 const NOW = 1_000_000;
 
@@ -33,6 +34,12 @@ function parse(
 ): ReturnType<typeof parseMetrics> {
   return parseMetrics({ metrics });
 }
+
+void test("builds MongoDB 4.4-compatible date bucket expressions", () => {
+  assert.deepStrictEqual(dateBucketExpression("$ts", 300000), {
+    $subtract: ["$ts", { $mod: [{ $toLong: "$ts" }, 300000] }],
+  });
+});
 
 void test("applies scale and offset to a single parameter", () => {
   const data = createDeviceData({

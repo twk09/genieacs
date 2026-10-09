@@ -24,8 +24,9 @@ Prerequisites
 
 .. topic:: MongoDB
 
-  GenieACS requires MongoDB 3.6 and up. Refer to https://www.mongodb.com/ for
-  instructions.
+  GenieACS supports MongoDB 4.4 and 7.0. Both versions are tested in the
+  project's CI compatibility matrix. Refer to https://www.mongodb.com/ for
+  installation instructions.
 
 Install GenieACS
 -------------------

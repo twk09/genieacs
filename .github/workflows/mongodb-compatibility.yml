@@ -1,0 +1,38 @@
+name: MongoDB compatibility
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: MongoDB ${{ matrix.mongo }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mongo: ["4.4", "7.0"]
+    services:
+      mongodb:
+        image: mongo:${{ matrix.mongo }}
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'
+          || mongo --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          GENIEACS_MONGODB_TEST_URL: mongodb://127.0.0.1:27017/genieacs_compat_test
