@@ -86,15 +86,95 @@ function navigateHandler(e: NavigateEvent): void {
   });
 }
 
+let fallbackController: AbortController | null = null;
+
+function loadFallbackUrl(url: URL): Promise<void> {
+  if (url.hash.startsWith("#!/")) {
+    const hashUrl = new URL(url.origin + url.hash.slice(2));
+    url.hash = "";
+    url.pathname = hashUrl.pathname;
+    url.search = hashUrl.search;
+    window.history.replaceState(null, "", url);
+  } else if (url.hash) {
+    return Promise.resolve();
+  }
+
+  const match = matchRoute(url.pathname);
+  if (!match) return Promise.resolve();
+  url.pathname = match.pathname;
+
+  const params = new URLSearchParams(url.searchParams);
+  for (const [key, value] of Object.entries(match.params))
+    params.set(key, value);
+
+  fallbackController?.abort();
+  fallbackController = new AbortController();
+  return handler(match.route, params, fallbackController.signal);
+}
+
+function fallbackNavigate(url: URL, replace = false): Promise<void> {
+  if (url.origin !== window.location.origin || !matchRoute(url.pathname)) {
+    window.location.assign(url.href);
+    return Promise.resolve();
+  }
+
+  url.pathname = matchRoute(url.pathname)!.pathname;
+  window.history[replace ? "replaceState" : "pushState"](null, "", url);
+  return loadFallbackUrl(url);
+}
+
+function fallbackClickHandler(e: MouseEvent): void {
+  if (
+    e.defaultPrevented ||
+    e.button !== 0 ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.shiftKey ||
+    e.altKey ||
+    !(e.target instanceof Element)
+  )
+    return;
+
+  const anchor = e.target.closest("a[href]");
+  if (
+    !(anchor instanceof HTMLAnchorElement) ||
+    anchor.hasAttribute("download") ||
+    (anchor.target && anchor.target !== "_self") ||
+    anchor.relList.contains("external")
+  )
+    return;
+
+  const url = new URL(anchor.href);
+  if (
+    url.origin !== window.location.origin ||
+    !matchRoute(url.pathname) ||
+    (url.pathname === window.location.pathname &&
+      url.search === window.location.search &&
+      url.hash !== window.location.hash)
+  )
+    return;
+
+  e.preventDefault();
+  fallbackNavigate(url).catch(console.error);
+}
+
 export function initRouter(_handler: typeof handler): void {
   handler = _handler;
 
-  window.navigation.addEventListener("navigate", navigateHandler);
+  if ("navigation" in window && window.navigation) {
+    window.navigation.addEventListener("navigate", navigateHandler);
 
-  // Initial render
-  window.navigation.navigate(window.navigation.currentEntry!.url!, {
-    history: "replace",
-  });
+    // Initial render
+    window.navigation.navigate(window.navigation.currentEntry!.url!, {
+      history: "replace",
+    });
+  } else {
+    document.addEventListener("click", fallbackClickHandler);
+    window.addEventListener("popstate", () => {
+      loadFallbackUrl(new URL(window.location.href)).catch(console.error);
+    });
+    loadFallbackUrl(new URL(window.location.href)).catch(console.error);
+  }
 }
 
 export async function navigate(
@@ -102,6 +182,8 @@ export async function navigate(
   params?: Record<string, string>,
 ): Promise<void> {
   if (params) path += "?" + new URLSearchParams(params).toString();
+  if (!("navigation" in window) || !window.navigation)
+    return fallbackNavigate(new URL(path, window.location.href));
   await window.navigation.navigate(path).committed;
 }
 
@@ -110,9 +192,15 @@ export async function redirect(
   params?: Record<string, string>,
 ): Promise<void> {
   if (params) path += "?" + new URLSearchParams(params).toString();
+  if (!("navigation" in window) || !window.navigation)
+    return fallbackNavigate(new URL(path, window.location.href), true);
   await window.navigation.navigate(path, { history: "replace" }).committed;
 }
 
 export async function reload(): Promise<void> {
+  if (!("navigation" in window) || !window.navigation) {
+    window.location.reload();
+    return;
+  }
   await window.navigation.reload().committed;
 }

@@ -46,15 +46,20 @@ export async function request(
   const target = new URL(url, location.origin);
   if (params) target.search = new URLSearchParams(params).toString();
 
-  const timeoutSignal = AbortSignal.timeout(timeout);
-  const combinedSignal = signal
-    ? AbortSignal.any([signal, timeoutSignal])
-    : timeoutSignal;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeout);
+  const abortRequest = (): void => controller.abort();
+  if (signal?.aborted) abortRequest();
+  else signal?.addEventListener("abort", abortRequest, { once: true });
 
   const init: RequestInit = {
     method,
     headers: { ...headers },
-    signal: combinedSignal,
+    signal: controller.signal,
     credentials: "same-origin",
   };
 
@@ -84,6 +89,8 @@ export async function request(
     return res;
   } catch (err) {
     if (err instanceof HttpError) throw err;
+    if (timedOut) throw new HttpError("Request timeout", 0, "");
+    if (signal?.aborted) throw new HttpError("Request aborted", 0, "");
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new HttpError("Request aborted", 0, "");
     }
@@ -91,6 +98,9 @@ export async function request(
       throw new HttpError("Request timeout", 0, "");
     }
     throw new HttpError("Server is unreachable", 0, "");
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", abortRequest);
   }
 }
 

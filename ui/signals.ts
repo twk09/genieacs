@@ -115,7 +115,7 @@ export function registerCleanup(cleanup: () => void): boolean {
   return false;
 }
 
-const NEVER_ABORTED = AbortSignal.any([]);
+const NEVER_ABORTED = new AbortController().signal;
 
 // Returns the AbortSignal of the current cleanup owner — the enclosing
 // ComputedSignal, or the ambient owner re-established across an async/dispatch
