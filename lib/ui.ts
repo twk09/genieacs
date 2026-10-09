@@ -9,7 +9,9 @@ import koaJwt from "koa-jwt";
 import * as config from "./config.ts";
 import api from "./ui/api.ts";
 import Authorizer from "./common/authorizer.ts";
+import Expression from "./common/expression.ts";
 import * as logger from "./logger.ts";
+import { authLdap } from "./ldap.ts";
 import * as localCache from "./ui/local-cache.ts";
 import { PermissionSet } from "./types.ts";
 import { authLocal } from "./api-functions.ts";
@@ -24,10 +26,43 @@ const router = new Router();
 
 const JWT_SECRET = "" + config.get("UI_JWT_SECRET");
 const JWT_COOKIE = "genieacs-ui-jwt";
+const AUTH_ENABLED = config.get("UI_AUTH_ENABLED") as boolean;
+const LDAP_ENABLED = config.get("LDAP_ENABLED") as boolean;
+
+const RESOURCES = [
+  "devices",
+  "presets",
+  "provisions",
+  "files",
+  "uploads",
+  "virtualParameters",
+  "config",
+  "permissions",
+  "users",
+  "faults",
+  "tasks",
+  "views",
+];
+
+const FULL_ACCESS_AUTHORIZER = new Authorizer([
+  [
+    Object.fromEntries(
+      RESOURCES.map((r) => [
+        r,
+        {
+          access: 3,
+          validate: new Expression.Literal(true),
+          filter: new Expression.Literal(true),
+        },
+      ]),
+    ),
+  ],
+]);
 
 interface TokenPayload {
   authMethod: string;
   username: string;
+  roles?: string[];
 }
 
 const getAuthorizer = memoize(
@@ -71,24 +106,35 @@ koa.use(
         return !localCache.getUsers(ctx.state.configSnapshot)[token.username];
       }
 
+      if (token.authMethod === "ldap") return !LDAP_ENABLED;
+
       return true;
     },
   }),
 );
 
 koa.use(async (ctx, next) => {
+  if (!AUTH_ENABLED) {
+    ctx.state.user = { username: "anonymous", authMethod: "none" };
+    ctx.state.authorizer = FULL_ACCESS_AUTHORIZER;
+    return next();
+  }
+
   let roles: string[] = [];
 
   if (ctx.state.user?.username) {
-    let user;
     if (ctx.state.user.authMethod === "local") {
-      user = localCache.getUsers(ctx.state.configSnapshot)[
+      const user = localCache.getUsers(ctx.state.configSnapshot)[
         ctx.state.user.username
       ];
+      roles = user.roles || [];
+    } else if (ctx.state.user.authMethod === "ldap") {
+      const tokenRoles = ctx.state.user.roles;
+      if (Array.isArray(tokenRoles))
+        roles = tokenRoles.filter((r) => typeof r === "string");
     } else {
       throw new Error("Invalid auth method");
     }
-    roles = user.roles || [];
   }
 
   ctx.state.authorizer = getAuthorizer(
@@ -120,10 +166,11 @@ router.post("/login", async (ctx) => {
     method: null as string | null,
   };
 
-  function success(authMethod: string): void {
+  function success(authMethod: string, roles?: string[]): void {
     log.method = authMethod;
     const expiresIn = remember ? TWO_WEEKS_SECS : ONE_DAY_SECS;
     const payload: TokenPayload = { username, authMethod };
+    if (roles) payload.roles = roles;
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn });
     ctx.cookies.set(JWT_COOKIE, token, {
       sameSite: "lax",
@@ -142,6 +189,9 @@ router.post("/login", async (ctx) => {
 
   if (await authLocal(ctx.state.configSnapshot, username, password))
     return void success("local");
+
+  const ldapRoles = await authLdap(username, password);
+  if (ldapRoles) return void success("ldap", ldapRoles);
 
   failure();
 });
@@ -231,6 +281,7 @@ function renderIndex(ctx: Koa.Context): void {
   );
 
   if (
+    AUTH_ENABLED &&
     !Object.keys(localCache.getUsers(ctx.state.configSnapshot)).length &&
     ctx.path !== "/wizard"
   ) {

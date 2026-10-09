@@ -66,6 +66,20 @@ const options: Record<
   UI_LOG_FILE: { type: "path", default: "" },
   UI_ACCESS_LOG_FILE: { type: "path", default: "" },
   UI_JWT_SECRET: { type: "string", default: "" },
+  UI_AUTH_ENABLED: { type: "bool", default: true },
+
+  LDAP_ENABLED: { type: "bool", default: false },
+  LDAP_URL: { type: "string", default: "" },
+  LDAP_START_TLS: { type: "bool", default: false },
+  LDAP_TLS_REJECT_UNAUTHORIZED: { type: "bool", default: true },
+  LDAP_TIMEOUT: { type: "int", default: 5000 },
+  LDAP_BIND_DN: { type: "string", default: "" },
+  LDAP_BIND_PASSWORD: { type: "string", default: "" },
+  LDAP_USER_BASE_DN: { type: "string", default: "" },
+  LDAP_USER_FILTER: { type: "string", default: "(uid={username})" },
+  LDAP_GROUP_ATTRIBUTE: { type: "string", default: "memberOf" },
+  LDAP_ROLE_MAP: { type: "string", default: "" },
+  LDAP_DEFAULT_ROLES: { type: "string", default: "" },
 
   UDP_CONNECTION_REQUEST_PORT: { type: "int", default: 0 },
   FORWARDED_HEADER: { type: "string", default: "" },
@@ -76,6 +90,15 @@ const options: Record<
   MAX_CACHE_TTL: { type: "int", default: 86400 },
   DEBUG_FILE: { type: "path", default: "" },
   DEBUG_FORMAT: { type: "string", default: "yaml" },
+  DEBUG_TRACE_TTL: { type: "int", default: 120 },
+  DEBUG_TRACE_MAX_BODY: { type: "int", default: 524288 },
+  KPI_CONFIG_FILE: {
+    type: "path",
+    default: resolve(ROOT_DIR, "config/kpi.json"),
+  },
+  KPI_QUERY_INTERVAL_SECONDS: { type: "int", default: 300 },
+  KPI_RAW_TTL: { type: "int", default: 7776000 },
+  KPI_HOURLY_TTL: { type: "int", default: 34128000 },
   DEBUG: { type: "bool", default: false },
   RETRY_DELAY: { type: "int", default: 300 },
   SESSION_TIMEOUT: { type: "int", default: 30 },
@@ -217,6 +240,7 @@ if (existsSync(configFilename)) {
 }
 
 if (configDir) setConfig("EXT_DIR", `${configDir}/ext`);
+if (configDir) setConfig("KPI_CONFIG_FILE", `${configDir}/kpi.json`);
 
 if (["true", "1"].includes(cwmpSsl)) {
   const d = configDir || `${ROOT_DIR}/config`;

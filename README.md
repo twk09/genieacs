@@ -66,6 +66,53 @@ populate some initial configuration.
 Visit [docs.genieacs.com](https://docs.genieacs.com) for more documentation and
 a complete installation guide for production deployments.
 
+## Source Development
+
+The repository includes local development scripts for the four services. MongoDB
+must be installed and running separately:
+
+    npm install
+    ./start-dev.sh
+
+The first start creates `config/config.json` from `config/config.example.json`
+and generates a private `UI_JWT_SECRET`. The local file is ignored by Git; edit
+it for deployment-specific settings. The UI is available at
+<http://localhost:3000>, with CWMP, NBI, and FS on ports 7547, 7557, and 7567.
+Stop the services with:
+
+    ./stop-dev.sh
+
+The UI configuration and provisions are maintained as source files in
+`config/ui/` and `config/provisions/`. Preview and apply them to the connected
+GenieACS database with:
+
+    node config/apply-config.mjs --dry-run
+    node config/apply-config.mjs
+
+Set `INFORM_USERNAME` and `INFORM_PASSWORD` in the local config before applying
+the `inform` provision. A personal `config/provisions/inform.js` can be used as
+a local override; that file is ignored by Git. The tracked
+`config/provisions/inform.example.js` contains placeholders only. Set
+`GRAFANA_DASHBOARD_URL` in `config/config.json` to add a deployment-specific
+Grafana link to the device page; the shared YAML has no private address.
+
+When UI authentication is enabled, set `UI_USER` and `UI_PASSWORD` for the
+configuration script. Its defaults (`admin`/`admin`) are only for a fresh local
+development setup. Set `UI_AUTH_ENABLED` to `false` only on an isolated, trusted
+network; this grants full administrator access to every visitor.
+
+KPI metric mappings live in `config/kpi.json`. KPI samples are recorded during
+CWMP sessions and stored in MongoDB; the per-device and fleet charts use these
+samples. `KPI_QUERY_INTERVAL_SECONDS` (default 300) controls the Periodic Inform
+interval provisioned by `config/provisions/inform.js`. After changing it, run
+`node config/apply-config.mjs`; devices adopt the interval on their next Inform.
+
+The device page offers live CWMP traces. They are captured only while the Debug
+panel is active and can be downloaded as a text file. Traces can include modem
+configuration values, so use them only on trusted networks and stop capture when
+finished. LDAP and KPI retention options are documented in
+`docs/environment-variables.rst`.
+
 ## Support
 
 The [forum](https://forum.genieacs.com) is a good place to get guidance and help

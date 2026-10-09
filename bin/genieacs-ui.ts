@@ -40,6 +40,12 @@ if (!cluster.worker) {
 
   cluster.start(WORKER_COUNT, SERVICE_PORT, SERVICE_ADDRESS);
 
+  if (!config.get("UI_AUTH_ENABLED"))
+    logger.warn({
+      message:
+        "UI authentication is disabled, anyone who can reach this port has full admin access",
+    });
+
   process.on("SIGINT", () => {
     logger.info({
       message: "Received signal SIGINT, exiting",

@@ -53,6 +53,7 @@ function httpGet(
   options: http.RequestOptions,
   _debug: boolean,
   deviceId: string,
+  trace: boolean,
 ): Promise<{ statusCode: number; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const req = http
@@ -60,15 +61,15 @@ function httpGet(
         res.resume();
         resolve({ statusCode: res.statusCode ?? 0, headers: res.headers });
         if (_debug) {
-          debug.outgoingHttpRequest(req, deviceId, "GET", url, null);
-          debug.incomingHttpResponse(res, deviceId, null);
+          debug.outgoingHttpRequest(req, deviceId, "GET", url, null, trace);
+          debug.incomingHttpResponse(res, deviceId, null, trace);
         }
       })
       .on("error", (err) => {
         req.destroy();
         reject(err);
         if (_debug)
-          debug.outgoingHttpRequestError(req, deviceId, "GET", url, err);
+          debug.outgoingHttpRequestError(req, deviceId, "GET", url, err, trace);
       })
       .on("timeout", () => {
         req.destroy();
@@ -83,6 +84,7 @@ export async function httpConnectionRequest(
   timeout: number,
   _debug: boolean,
   deviceId: string,
+  trace = false,
 ): Promise<string> {
   const url = new URL(address);
   if (url.protocol !== "http:")
@@ -133,13 +135,13 @@ export async function httpConnectionRequest(
 
     let res: { statusCode: number; headers: http.IncomingHttpHeaders };
     try {
-      res = await httpGet(url, opts, _debug, deviceId);
+      res = await httpGet(url, opts, _debug, deviceId, trace);
     } catch (err) {
       if (!(err instanceof Error)) throw err;
       // Workaround for some devices unexpectedly closing the connection
       if (authHeader) {
         try {
-          res = await httpGet(url, opts, _debug, deviceId);
+          res = await httpGet(url, opts, _debug, deviceId, trace);
         } catch (err) {
           if (!(err instanceof Error)) throw err;
           return `Connection request error: ${err.message}`;
@@ -183,6 +185,7 @@ export async function udpConnectionRequest(
   sourcePort = 0,
   _debug: boolean,
   deviceId: string,
+  trace = false,
 ): Promise<void> {
   const now = Date.now();
 
@@ -219,7 +222,8 @@ export async function udpConnectionRequest(
         client.send(message, 0, message.length, port, host, (err) => {
           if (err) reject(err);
           else resolve();
-          if (_debug) debug.outgoingUdpMessage(host, deviceId, port, msg);
+          if (_debug)
+            debug.outgoingUdpMessage(host, deviceId, port, msg, trace);
         });
       });
     }
@@ -254,6 +258,7 @@ export async function xmppConnectionRequest(
   timeout: number,
   _debug: boolean,
   deviceId: string,
+  trace = false,
 ): Promise<string> {
   if (!xmppClient) {
     const [host, username] = XMPP_JID.split("@").reverse();
@@ -293,8 +298,8 @@ export async function xmppConnectionRequest(
       return err.message;
     }
     if (_debug) {
-      debug.outgoingXmppStanza(deviceId, rawReq);
-      debug.incomingXmppStanza(deviceId, rawRes);
+      debug.outgoingXmppStanza(deviceId, rawReq, trace);
+      debug.incomingXmppStanza(deviceId, rawRes, trace);
     }
     const attrs = parseAttrs(res.attrs);
     const type = attrs.find((a) => a.name === "type");

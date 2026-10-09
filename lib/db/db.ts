@@ -1,4 +1,9 @@
-import { MongoClient, Collection, GridFSBucket } from "mongodb";
+import {
+  MongoClient,
+  MongoServerError,
+  Collection,
+  GridFSBucket,
+} from "mongodb";
 import { get } from "../config.ts";
 import * as MongoTypes from "./types.ts";
 
@@ -22,6 +27,9 @@ export const collections = {
   locks: null as unknown as Collection<MongoTypes.Lock>,
   views: null as unknown as Collection<MongoTypes.View>,
   uploads: null as unknown as Collection<MongoTypes.Upload>,
+  traces: null as unknown as Collection<MongoTypes.Trace>,
+  kpi: null as unknown as Collection<MongoTypes.KpiPoint>,
+  kpiHourly: null as unknown as Collection<MongoTypes.KpiHourly>,
 };
 
 let clientPromise: Promise<MongoClient>;
@@ -48,6 +56,9 @@ export async function connect(): Promise<void> {
   collections.locks = db.collection("locks");
   collections.views = db.collection("views");
   collections.uploads = db.collection("uploads.files");
+  collections.traces = db.collection("traces");
+  collections.kpi = db.collection("kpi");
+  collections.kpiHourly = db.collection("kpiHourly");
   filesBucket = new GridFSBucket(db);
   uploadsBucket = new GridFSBucket(db, { bucketName: "uploads" });
 
@@ -55,9 +66,52 @@ export async function connect(): Promise<void> {
     collections.tasks.createIndex({ device: 1, timestamp: 1 }),
     collections.cache.createIndex({ expire: 1 }, { expireAfterSeconds: 0 }),
     collections.locks.createIndex({ expire: 1 }, { expireAfterSeconds: 0 }),
+    collections.traces.createIndex({ device: 1, timestamp: 1 }),
+    collections.traces.createIndex({ expire: 1 }, { expireAfterSeconds: 0 }),
   ]);
 }
 
 export async function disconnect(): Promise<void> {
   if (clientPromise != null) await (await clientPromise).close();
+}
+
+// MongoDB error codes: 48 NamespaceExists, 85 IndexOptionsConflict, 86 IndexKeySpecsConflict
+export async function ensureKpiCollections(
+  rawTtl: number,
+  hourlyTtl: number,
+): Promise<void> {
+  const db = (await clientPromise).db();
+
+  const existing = await db.listCollections({ name: "kpi" }).toArray();
+  if (existing.length) {
+    await db.command({ collMod: "kpi", expireAfterSeconds: rawTtl });
+  } else {
+    try {
+      await db.createCollection("kpi", {
+        timeseries: {
+          timeField: "ts",
+          metaField: "meta",
+          granularity: "minutes",
+        },
+        expireAfterSeconds: rawTtl,
+      });
+    } catch (err) {
+      if (!(err instanceof MongoServerError) || err.code !== 48) throw err;
+    }
+  }
+
+  await collections.kpiHourly.createIndex({ device: 1, metric: 1, hour: 1 });
+  try {
+    await collections.kpiHourly.createIndex(
+      { hour: 1 },
+      { expireAfterSeconds: hourlyTtl },
+    );
+  } catch (err) {
+    if (!(err instanceof MongoServerError)) throw err;
+    if (err.code !== 85 && err.code !== 86) throw err;
+    await db.command({
+      collMod: "kpiHourly",
+      index: { keyPattern: { hour: 1 }, expireAfterSeconds: hourlyTtl },
+    });
+  }
 }

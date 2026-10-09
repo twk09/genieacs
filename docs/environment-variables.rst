@@ -42,6 +42,45 @@ DEBUG_FORMAT
 
   Default: ``yaml``
 
+DEBUG_TRACE_TTL
+  How long, in seconds, the messages captured by the live debug trace in
+  genieacs-ui are kept on the server. They are deleted immediately when the
+  trace is stopped, so this only matters when the browser is closed without
+  stopping it.
+
+  Default: ``120``
+
+DEBUG_TRACE_MAX_BODY
+  Maximum number of characters of a message body stored in a debug trace. Longer
+  bodies are truncated.
+
+  Default: ``524288``
+
+KPI_CONFIG_FILE
+  JSON file containing the metric names, device parameter paths, units, and
+  counter/gauge types used by the per-device KPI chart.
+
+  Default: ``config/kpi.json``
+
+KPI_RAW_TTL
+  Retention in seconds for raw five-minute KPI samples.
+
+  Default: ``7776000``
+
+KPI_HOURLY_TTL
+  Retention in seconds for hourly KPI aggregates.
+
+  Default: ``34128000``
+
+KPI_QUERY_INTERVAL_SECONDS
+  Periodic Inform interval provisioned to CPEs by ``config/provisions/inform.js``.
+  KPI samples are recorded from CWMP sessions at this cadence. After changing
+  ``config/config.json``, run ``node config/apply-config.mjs``; each CPE applies
+  the new interval on its next Inform. This does not create a separate polling
+  connection request.
+
+  Default: ``300``
+
 LOG_FORMAT
   The format used for the log entries in ``CWMP_LOG_FILE``, ``NBI_LOG_FILE``,
   ``FS_LOG_FILE``, and ``UI_LOG_FILE``. Possible values are ``simple`` and
@@ -219,5 +258,77 @@ UI_ACCESS_LOG_FILE
 UI_JWT_SECRET
   The key used for signing JWT tokens that are stored in browser cookies. The
   string can be up to 64 characters in length.
+
+  Default: unset
+
+UI_AUTH_ENABLED
+  Set to ``false`` to disable authentication in genieacs-ui. Every visitor is
+  then treated as an administrator with full access, so only use this on
+  networks you trust.
+
+  Default: ``true``
+
+LDAP_ENABLED
+  Allow users to log in to genieacs-ui with their LDAP credentials. Local users
+  are checked first. A user must end up with at least one role, otherwise the
+  login is rejected.
+
+  Default: ``false``
+
+LDAP_URL
+  URL of the LDAP server, e.g. ``ldaps://ldap.example.com:636``.
+
+  Default: unset
+
+LDAP_START_TLS
+  Upgrade a plain ``ldap://`` connection using StartTLS.
+
+  Default: ``false``
+
+LDAP_TLS_REJECT_UNAUTHORIZED
+  Reject LDAP servers whose TLS certificate cannot be verified.
+
+  Default: ``true``
+
+LDAP_TIMEOUT
+  Connection and operation timeout in milliseconds.
+
+  Default: ``5000``
+
+LDAP_BIND_DN
+  DN of the account used to look up users. If omitted, the search is done
+  anonymously.
+
+  Default: unset
+
+LDAP_BIND_PASSWORD
+  Password of the account in ``LDAP_BIND_DN``.
+
+  Default: unset
+
+LDAP_USER_BASE_DN
+  Base DN under which users are searched.
+
+  Default: unset
+
+LDAP_USER_FILTER
+  Search filter used to find the user. ``{username}`` is replaced with the
+  escaped login name. The filter must match exactly one entry.
+
+  Default: ``(uid={username})``
+
+LDAP_GROUP_ATTRIBUTE
+  Attribute of the user entry that lists the groups the user belongs to.
+
+  Default: ``memberOf``
+
+LDAP_ROLE_MAP
+  Maps group DNs to genieacs-ui roles. Entries are separated by ``;`` and each
+  one has the form ``<group DN>=><role>[,<role>...]``.
+
+  Default: unset
+
+LDAP_DEFAULT_ROLES
+  Comma-separated roles granted to every user that authenticates through LDAP.
 
   Default: unset

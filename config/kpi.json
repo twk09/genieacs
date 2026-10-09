@@ -1,0 +1,86 @@
+{
+  "metrics": [
+    {
+      "name": "system.uptime_seconds",
+      "path": "Device.DeviceInfo.UpTime",
+      "unit": "s"
+    },
+    {
+      "name": "system.cpu_percent",
+      "path": "Device.DeviceInfo.ProcessStatus.CPUUsage",
+      "unit": "%"
+    },
+    {
+      "name": "system.memory_free_mib",
+      "path": "Device.DeviceInfo.MemoryStatus.Free",
+      "scale": 0.0009765625,
+      "unit": "MiB"
+    },
+    {
+      "name": "wifi.channel",
+      "path": "Device.WiFi.Radio.*.Channel",
+      "bandPath": "Device.WiFi.Radio.{instance}.OperatingFrequencyBand",
+      "unit": "channel"
+    },
+    {
+      "name": "wifi.clients",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDeviceNumberOfEntries",
+      "band": "unknown",
+      "unit": "devices",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wan.tx_bytes",
+      "path": "Device.IP.Interface.2.Stats.BytesSent",
+      "kind": "counter",
+      "unit": "bytes",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wan.rx_bytes",
+      "path": "Device.IP.Interface.2.Stats.BytesReceived",
+      "kind": "counter",
+      "unit": "bytes",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wifi.noise_dbm",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDevice.*.Noise",
+      "band": "unknown",
+      "unit": "dBm",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wifi.tx_bytes",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDevice.*.TxBytes",
+      "kind": "counter",
+      "band": "unknown",
+      "unit": "bytes",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wifi.rx_bytes",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDevice.*.RxBytes",
+      "kind": "counter",
+      "band": "unknown",
+      "unit": "bytes",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wifi.tx_errors",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDevice.*.TxErrors",
+      "kind": "counter",
+      "band": "unknown",
+      "unit": "errors",
+      "model": "SG-XD71"
+    },
+    {
+      "name": "wifi.rx_errors",
+      "path": "Device.WiFi.AccessPoint.*.AssociatedDevice.*.RxErrors",
+      "kind": "counter",
+      "band": "unknown",
+      "unit": "errors",
+      "model": "SG-XD71"
+    }
+  ]
+}

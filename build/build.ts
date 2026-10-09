@@ -130,7 +130,13 @@ const packageDotJsonPlugin = {
 const inlineDepsPlugin = {
   name: "inlineDeps",
   setup(build) {
-    const deps = ["espresso-iisojs", "@codemirror", "yaml"];
+    const deps = [
+      "espresso-iisojs",
+      "@codemirror",
+      "yaml",
+      "chart.js",
+      "@kurkle/color",
+    ];
     const depFiles = new Set();
     build.onResolve({ filter: /^[^.]/ }, async (args) => {
       if (args.pluginData === "inlineDeps") return undefined;

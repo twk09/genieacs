@@ -5,6 +5,7 @@ import * as server from "../lib/server.ts";
 import * as cwmp from "../lib/cwmp.ts";
 import * as db from "../lib/db/db.ts";
 import * as extensions from "../lib/extensions.ts";
+import { startKpi } from "../lib/kpi-store.ts";
 import { version as VERSION } from "../package.json";
 
 logger.init("cwmp", VERSION);
@@ -91,6 +92,12 @@ if (!cluster.worker) {
     .connect()
     .then(() => {
       server.start(options, cwmp.listener);
+      startKpi().catch((err) => {
+        logger.error({
+          message: "Failed to start KPI storage",
+          exception: err,
+        });
+      });
     })
     .catch((err) => {
       setTimeout(() => {

@@ -145,6 +145,7 @@ export function init(
     doneTasks: [],
     new: false,
     debug: false,
+    trace: false,
     syncState: undefined,
     rpcRequest: undefined,
   };

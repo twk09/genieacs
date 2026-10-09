@@ -206,3 +206,48 @@ export interface Upload {
   length: number;
   uploadDate: Date;
 }
+
+export interface KpiPoint {
+  ts: Date;
+  meta: {
+    device: string;
+    metric: string;
+    instance: string;
+    band: string;
+    kind: "gauge" | "counter";
+  };
+  value: number;
+}
+
+export interface KpiHourly {
+  _id: { device: string; metric: string; instance: string; hour: Date };
+  device: string;
+  metric: string;
+  instance: string;
+  hour: Date;
+  band: string;
+  kind: "gauge" | "counter";
+  count: number;
+  min: number;
+  max: number;
+  avg: number;
+  first: number;
+  last: number;
+  increase?: number;
+}
+
+export interface Trace {
+  _id?: ObjectId;
+  device: string;
+  timestamp: Date;
+  expire: Date;
+  event: string;
+  remoteAddress?: string;
+  method?: string;
+  url?: string;
+  statusCode?: number;
+  headers?: [string, string][];
+  body?: string | null;
+  truncated?: boolean;
+  error?: string;
+}

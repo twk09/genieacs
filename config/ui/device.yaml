@@ -1,0 +1,216 @@
+- type: "'tags'"
+- type: "'ping'"
+- element: "'div.device-summary-grid'"
+  type: "'container'"
+  components:
+    - element: "'section.device-info-section'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'Device identity'"
+        - type: "'parameter-list'"
+          parameters:
+            - label: "'Serial number'"
+              parameter: DeviceID.SerialNumber
+            - label: "'Product class'"
+              parameter: DeviceID.ProductClass
+            - label: "'Manufacturer'"
+              parameter: DeviceID.Manufacturer
+            - label: "'OUI'"
+              parameter: DeviceID.OUI
+            - label: "'Hardware version'"
+              parameter: Device.DeviceInfo.HardwareVersion
+            - label: "'Software version'"
+              parameter: Device.DeviceInfo.SoftwareVersion
+    - element: "'section.device-info-section'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'Connection and health'"
+        - type: "'parameter-list'"
+          parameters:
+            - element: "'span.inform'"
+              label: "'Last inform'"
+              parameter: DATE_STRING(Events.Inform)
+              type: "'container'"
+              components:
+                - type: "'parameter'"
+                - chart: "'online'"
+                  type: "'overview-dot'"
+                - type: "'summon-button'"
+                  parameters:
+                    - Device.DeviceInfo.UpTime
+                    - Device.Services.VoiceService.1.SIP.Network.1.*
+            - label: "'WAN IP'"
+              parameter: Device.IP.Interface.2.IPv4Address.1.IPAddress
+            - label: "'MAC address'"
+              parameter: Device.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress
+            - label: "'Uptime'"
+              parameter: Device.DeviceInfo.UpTime
+            - label: "'CPU usage'"
+              parameter: Device.DeviceInfo.ProcessStatus.CPUUsage
+            - label: "'Free memory'"
+              parameter: Device.DeviceInfo.MemoryStatus.Free
+            - label: "'IP RDK'"
+              parameter: Device.DeviceInfo.X_COMCAST-COM_WAN_IP
+- type: "'kpi-chart'"
+- type: "'debug-trace'"
+- element: "'div.device-detail-grid'"
+  type: "'container'"
+  components:
+    - element: "'section.device-detail-section.device-detail-section-wide'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'LAN and DHCP'"
+        - label: "'Connected devices'"
+          parameter: Device.Hosts.Host
+          type: "'parameter-table'"
+          childParameters:
+            - label: "'Host name'"
+              parameter: HostName
+            - label: "'IP address'"
+              parameter: IPAddress
+            - label: "'MAC address'"
+              parameter: PhysAddress
+        - filter: Device.DHCPv4.Server.Pool.1.ClientNumberOfEntries > 0
+          type: "'container'"
+          components:
+            - label: "'DHCP leases'"
+              parameter: Device.DHCPv4.Server.Pool.1.Client
+              type: "'parameter-table'"
+              childParameters:
+                - label: "'Host name'"
+                  parameter: Alias
+                - label: "'IP address'"
+                  parameter: IPv4Address.1.IPAddress
+                - label: "'MAC address'"
+                  parameter: Chaddr
+                - label: "'Lease remaining'"
+                  parameter: IPv4Address.1.LeaseTimeRemaining
+    - element: "'section.device-detail-section.device-detail-section-wide'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'Wi-Fi networks'"
+        - label: "'SSID / BSSID'"
+          parameter: Device.WiFi.SSID
+          type: "'parameter-table'"
+          childParameters:
+            - label: "'SSID'"
+              parameter: SSID
+            - label: "'BSSID'"
+              parameter: BSSID
+    - element: "'section.device-detail-section'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'Wi-Fi radios'"
+        - label: "'Radio status'"
+          parameter: Device.WiFi.Radio
+          type: "'parameter-table'"
+          childParameters:
+            - label: "'Alias'"
+              parameter: Alias
+            - label: "'Status'"
+              parameter: Status
+            - label: "'Band'"
+              parameter: OperatingFrequencyBand
+            - label: "'Channel'"
+              parameter: Channel
+            - label: "'Bandwidth'"
+              parameter: CurrentOperatingChannelBandwidth
+            - label: "'Transmit power'"
+              parameter: TransmitPower
+    - element: "'section.device-detail-section'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'Wi-Fi access points'"
+        - label: "'Associated devices per access point'"
+          parameter: Device.WiFi.AccessPoint
+          type: "'parameter-table'"
+          filter: AssociatedDeviceNumberOfEntries > 0
+          childParameters:
+            - label: "'Associated devices'"
+              parameter: AssociatedDeviceNumberOfEntries
+    - element: "'section.device-detail-section.device-detail-section-wide'"
+      type: "'container'"
+      components:
+        - element: "'h2.device-section-title'"
+          type: "'container'"
+          components:
+            - "'VoIP configuration'"
+        - label: "'SIP network settings'"
+          parameter: Device.Services.VoiceService.1.SIP.Network
+          type: "'parameter-table'"
+          childParameters:
+            - label: "'Enabled'"
+              parameter: Enable
+            - label: "'Status'"
+              parameter: Status
+            - label: "'Proxy'"
+              parameter: ProxyServer
+            - label: "'Registrar'"
+              parameter: RegistrarServer
+            - label: "'Outbound proxy'"
+              parameter: OutboundProxy
+            - label: "'User agent domain'"
+              parameter: UserAgentDomain
+            - label: "'Transport'"
+              parameter: ProxyServerTransport
+            - label: "'Proxy port'"
+              parameter: ProxyServerPort
+            - label: "'Registrar port'"
+              parameter: RegistrarServerPort
+        - filter: Device.Services.VoiceService.1.SIP.ClientNumberOfEntries > 0
+          type: "'container'"
+          components:
+            - label: "'SIP clients'"
+              parameter: Device.Services.VoiceService.1.SIP.Client
+              type: "'parameter-table'"
+              childParameters:
+                - label: "'Alias'"
+                  parameter: Alias
+                - label: "'Enabled'"
+                  parameter: Enable
+                - label: "'Auth username'"
+                  parameter: AuthUserName
+        - filter:
+            Device.Services.VoiceService.1.CallControl.LineNumberOfEntries > 0
+          type: "'container'"
+          components:
+            - label: "'Voice lines'"
+              parameter: Device.Services.VoiceService.1.CallControl.Line
+              type: "'parameter-table'"
+              childParameters:
+                - label: "'Alias'"
+                  parameter: Alias
+                - label: "'Enabled'"
+                  parameter: Enable
+                - label: "'Directory number'"
+                  parameter: DirectoryNumber
+- label: "'Faults'"
+  parameter: Faults
+  type: "'device-faults'"
+- element: "'div.container-full-width'"
+  type: "'container'"
+  components:
+    - element: "'h3'"
+      type: "'container'"
+      components:
+        - "'All parameters'"
+    - type: "'all-parameters'"
+- type: "'device-actions'"

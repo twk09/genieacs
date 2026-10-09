@@ -45,6 +45,8 @@ import {
 } from "./types.ts";
 import { parseXmlDeclaration } from "./xml-parser.ts";
 import * as debug from "./debug.ts";
+import { isTracing } from "./trace-lease.ts";
+import { saveSessionKpis } from "./kpi-store.ts";
 import { getRequestOrigin } from "./forwarded.ts";
 import { getSocketEndpoints } from "./server.ts";
 
@@ -200,7 +202,12 @@ async function writeResponse(
   httpResponse.setHeader("Content-Length", Buffer.byteLength(data));
   httpResponse.writeHead(res.code, res.headers);
   if (sessionContext.debug)
-    debug.outgoingHttpResponse(httpResponse, sessionContext.deviceId, res.data);
+    debug.outgoingHttpResponse(
+      httpResponse,
+      sessionContext.deviceId,
+      res.data,
+      sessionContext.trace,
+    );
   httpResponse.end(data);
 
   if (connection.destroyed) {
@@ -782,6 +789,21 @@ async function endSession(sessionContext: SessionContext): Promise<void> {
     ),
   );
 
+  // KPI storage must never fail the session
+  promises.push(
+    saveSessionKpis(
+      sessionContext.deviceId,
+      sessionContext.deviceData,
+      sessionContext.timestamp,
+    ).catch((err) => {
+      logger.error({
+        message: "Failed to store KPIs",
+        deviceId: sessionContext.deviceId,
+        exception: err,
+      });
+    }),
+  );
+
   if (sessionContext.operationsTouched) {
     for (const k of Object.keys(sessionContext.operationsTouched)) {
       if (sessionContext.operations[k]) {
@@ -997,7 +1019,12 @@ async function reportBadState(sessionContext: SessionContext): Promise<void> {
   httpResponse.setHeader("Content-Length", Buffer.byteLength(body));
   httpResponse.writeHead(400, { Connection: "close" });
   if (sessionContext.debug)
-    debug.outgoingHttpResponse(httpResponse, sessionContext.deviceId, body);
+    debug.outgoingHttpResponse(
+      httpResponse,
+      sessionContext.deviceId,
+      body,
+      sessionContext.trace,
+    );
   httpResponse.end(body);
   if (sessionContext.state) return endSession(sessionContext);
 }
@@ -1035,7 +1062,12 @@ async function responseUnauthorized(
   httpResponse.setHeader("Content-Length", Buffer.byteLength(body));
   httpResponse.writeHead(401, resHeaders);
   if (sessionContext.debug)
-    debug.outgoingHttpResponse(httpResponse, sessionContext.deviceId, body);
+    debug.outgoingHttpResponse(
+      httpResponse,
+      sessionContext.deviceId,
+      body,
+      sessionContext.trace,
+    );
   httpResponse.end(body);
 }
 
@@ -1056,12 +1088,17 @@ async function processRequest(
 
     const res = await inform(sessionContext, rpc);
 
-    sessionContext.debug = !!localCache.getConfig(
-      sessionContext.cacheSnapshot,
-      "cwmp.debug",
-      false,
-      (e) => session.configContextCallback(sessionContext, e),
-    );
+    // Set by the UI while someone is watching this device live
+    sessionContext.trace = await isTracing(sessionContext.deviceId);
+
+    sessionContext.debug =
+      sessionContext.trace ||
+      !!localCache.getConfig(
+        sessionContext.cacheSnapshot,
+        "cwmp.debug",
+        false,
+        (e) => session.configContextCallback(sessionContext, e),
+      );
 
     if (!sessionContext.timeout) {
       sessionContext.timeout = +localCache.getConfig(
@@ -1079,6 +1116,7 @@ async function processRequest(
         sessionContext.httpRequest,
         sessionContext.deviceId,
         body,
+        sessionContext.trace,
       );
     }
 
@@ -1118,6 +1156,7 @@ async function processRequest(
           sessionContext.httpResponse,
           sessionContext.deviceId,
           _body,
+          sessionContext.trace,
         );
       }
       sessionContext.httpResponse.end(_body);
@@ -1141,6 +1180,7 @@ async function processRequest(
       sessionContext.httpRequest,
       sessionContext.deviceId,
       body,
+      sessionContext.trace,
     );
   }
 
@@ -1331,8 +1371,9 @@ async function clientError(
   httpResponse.writeHead(400, { Connection: "close" });
 
   if (debugEnabled) {
-    debug.incomingHttpRequest(httpRequest, deviceId, body);
-    debug.outgoingHttpResponse(httpResponse, deviceId, msg);
+    const trace = sessionContext?.trace ?? false;
+    debug.incomingHttpRequest(httpRequest, deviceId, body, trace);
+    debug.outgoingHttpResponse(httpResponse, deviceId, msg, trace);
   }
 
   httpResponse.end(msg);

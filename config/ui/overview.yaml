@@ -1,0 +1,90 @@
+groups:
+  - label: "'Overview'"
+    charts:
+      - "'online'"
+      - "'faults'"
+      - "'informinterval'"
+      - "'uptime'"
+      - "'voip'"
+charts:
+  faults:
+    label: "'Faults'"
+    slices:
+      1_nofault:
+        color: "'#31a354'"
+        filter: Faults IS NULL
+        label: "'No faults'"
+      2_hasfault:
+        color: "'#e74c3c'"
+        filter: Faults IS NOT NULL
+        label: "'Has faults'"
+  informinterval:
+    label: "'Inform Interval'"
+    slices:
+      1_correct:
+        color: "'#31a354'"
+        filter: Device.ManagementServer.PeriodicInformInterval = 300
+        label: "'300s (correct)'"
+      2_wrong:
+        color: "'#e74c3c'"
+        filter:
+          Device.ManagementServer.PeriodicInformInterval < 300 OR
+          Device.ManagementServer.PeriodicInformInterval > 300
+        label: "'Non-standard'"
+      3_unknown:
+        color: "'#cccccc'"
+        filter: Device.ManagementServer.PeriodicInformInterval IS NULL
+        label: "'Unknown'"
+  online:
+    label: "'Online status'"
+    slices:
+      1_onlineNow:
+        color: "'#31a354'"
+        filter: Events.Inform > NOW() - 5 * 60 * 1000
+        label: "'Online now'"
+      2_past24:
+        color: "'#a1d99b'"
+        filter:
+          Events.Inform > (NOW() - 5 * 60 * 1000) - (24 * 60 * 60 * 1000) AND
+          Events.Inform < (NOW() - 5 * 60 * 1000)
+        label: "'Past 24 hours'"
+      3_others:
+        color: "'#e5f5e0'"
+        filter: Events.Inform < (NOW() - 5 * 60 * 1000) - (24 * 60 * 60 * 1000)
+        label: "'Others'"
+  voip:
+    label: "'VoIP Network'"
+    slices:
+      1_enabled:
+        color: "'#31a354'"
+        filter: Device.Services.VoiceService.1.SIP.Network.1.Enable = true
+        label: "'Enabled'"
+      2_disabled:
+        color: "'#e74c3c'"
+        filter: Device.Services.VoiceService.1.SIP.Network.1.Enable = false
+        label: "'Disabled'"
+      3_unknown:
+        color: "'#cccccc'"
+        filter: Device.Services.VoiceService.1.SIP.Network.1.Enable IS NULL
+        label: "'Unknown'"
+  uptime:
+    label: "'Uptime'"
+    slices:
+      1_uptimeless6h:
+        color: "'#31a354'"
+        filter: Device.DeviceInfo.UpTime < 21600
+        label: "'Less 6h'"
+      2_uptime24h:
+        color: "'#a1d99b'"
+        filter:
+          Device.DeviceInfo.UpTime > 21600 AND Device.DeviceInfo.UpTime < 86400
+        label: "'Less 24h'"
+      3_uptime48h:
+        color: "'#e5f5e0'"
+        filter:
+          Device.DeviceInfo.UpTime > 86400 AND Device.DeviceInfo.UpTime < 172800
+        label: "'Less 48h'"
+      4_uptimemore:
+        color: "'#81a354'"
+        filter: Device.DeviceInfo.UpTime > 172800
+        label: "'Over 48h'"

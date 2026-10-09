@@ -140,6 +140,7 @@ export interface SessionContext {
   presetCycles: number;
   new: boolean;
   debug: boolean;
+  trace: boolean;
   state: number;
   authState: number;
   tasks: Task[];

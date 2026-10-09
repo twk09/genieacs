@@ -41,6 +41,7 @@ import { hashPassword } from "./auth.ts";
 import { flattenDevice } from "./ui/db.ts";
 import { ResourceLockedError } from "./common/errors.ts";
 import * as config from "../lib/config.ts";
+import { isTracing } from "./trace-lease.ts";
 
 const XMPP_CONFIGURED = !!config.get("XMPP_JID");
 
@@ -168,7 +169,9 @@ export async function connectionRequest(
 
   authExp = authExp.evaluate(evalCallback);
 
-  const debug = getConfig(snapshot, "cwmp.debug", false, configCallback);
+  const trace = await isTracing(deviceId);
+  const debug =
+    trace || getConfig(snapshot, "cwmp.debug", false, configCallback);
 
   let udpProm = Promise.resolve(false);
   if (udpConnectionRequestAddress && +stunEnable) {
@@ -181,6 +184,7 @@ export async function connectionRequest(
         UDP_CONNECTION_REQUEST_PORT,
         debug,
         deviceId,
+        trace,
       ).then(
         () => true,
         () => false,
@@ -199,6 +203,7 @@ export async function connectionRequest(
       CONNECTION_REQUEST_TIMEOUT,
       debug,
       deviceId,
+      trace,
     );
   } else {
     status = await httpConnectionRequest(
@@ -208,6 +213,7 @@ export async function connectionRequest(
       CONNECTION_REQUEST_TIMEOUT,
       debug,
       deviceId,
+      trace,
     );
   }
 

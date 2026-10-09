@@ -3,10 +3,15 @@ import { Socket } from "node:net";
 import { appendFileSync } from "node:fs";
 import { stringify } from "./common/yaml.ts";
 import * as config from "./config.ts";
+import * as logger from "./logger.ts";
+import { collections } from "./db/db.ts";
+import { buildTrace } from "./trace.ts";
 import { getSocketEndpoints } from "./server.ts";
 
 const DEBUG_FILE = "" + config.get("DEBUG_FILE");
 const DEBUG_FORMAT = "" + config.get("DEBUG_FORMAT");
+const TRACE_TTL = Number(config.get("DEBUG_TRACE_TTL")) * 1000;
+const TRACE_MAX_BODY = Number(config.get("DEBUG_TRACE_MAX_BODY"));
 
 const connectionTimestamps = new WeakMap<Socket, Date>();
 
@@ -19,12 +24,31 @@ function getConnectionTimestamp(connection: Socket): Date {
   return t;
 }
 
+// When trace is set the message is also stored for the live view in the UI
+function emit(msg: Record<string, unknown>, trace: boolean): void {
+  if (DEBUG_FILE) {
+    if (DEBUG_FORMAT === "yaml")
+      appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
+    else if (DEBUG_FORMAT === "json")
+      appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
+    else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  }
+
+  if (!trace) return;
+  const doc = buildTrace(msg, TRACE_TTL, TRACE_MAX_BODY);
+  if (!doc) return;
+  collections.traces.insertOne(doc).catch((err) => {
+    logger.error({ message: "Failed to store debug trace", exception: err });
+  });
+}
+
 export function incomingHttpRequest(
   httpRequest: IncomingMessage,
   deviceId: string | null,
   body: string,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   const now = new Date();
   const con = httpRequest.socket;
   const socketEndpoints = getSocketEndpoints(con);
@@ -41,19 +65,16 @@ export function incomingHttpRequest(
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function outgoingHttpResponse(
   httpResponse: ServerResponse,
   deviceId: string | null,
   body: string,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   if (!httpResponse.socket) throw new Error("httpResponse.socket is null");
   const now = new Date();
   const con = httpResponse.socket;
@@ -69,11 +90,7 @@ export function outgoingHttpResponse(
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function outgoingHttpRequest(
@@ -82,8 +99,9 @@ export function outgoingHttpRequest(
   method: "GET" | "PUT" | "POST" | "DELETE",
   url: URL,
   body: string | null,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   if (!httpRequest.socket) throw new Error("httpRequest.socket is null");
   const now = new Date();
   const con = httpRequest.socket;
@@ -100,11 +118,7 @@ export function outgoingHttpRequest(
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function outgoingHttpRequestError(
@@ -113,8 +127,9 @@ export function outgoingHttpRequestError(
   method: "GET" | "PUT" | "POST" | "DELETE",
   url: URL,
   err: Error,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   const now = new Date();
   const msg = {
     event: "outgoing HTTP request",
@@ -129,19 +144,16 @@ export function outgoingHttpRequestError(
     error: err.message,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function incomingHttpResponse(
   httpResponse: IncomingMessage,
   deviceId: string,
   body: string | null,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   if (!httpResponse.socket) throw new Error("httpResponse.socket is null");
   const now = new Date();
   const con = httpResponse.socket;
@@ -156,11 +168,7 @@ export function incomingHttpResponse(
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function outgoingUdpMessage(
@@ -168,8 +176,9 @@ export function outgoingUdpMessage(
   deviceId: string,
   remotePort: number,
   body: string,
+  trace = false,
 ): void {
-  if (!DEBUG_FILE) return;
+  if (!DEBUG_FILE && !trace) return;
   const now = new Date();
   const msg = {
     event: "outgoing UDP message",
@@ -180,11 +189,7 @@ export function outgoingUdpMessage(
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
 export function clientError(remoteAddress: string, err: Error): void {
@@ -197,15 +202,15 @@ export function clientError(remoteAddress: string, err: Error): void {
     error: err.message,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, false);
 }
 
-export function outgoingXmppStanza(deviceId: string, body: string): void {
-  if (!DEBUG_FILE) return;
+export function outgoingXmppStanza(
+  deviceId: string,
+  body: string,
+  trace = false,
+): void {
+  if (!DEBUG_FILE && !trace) return;
   const now = new Date();
   const msg = {
     event: "outgoing XMPP stanza",
@@ -214,15 +219,15 @@ export function outgoingXmppStanza(deviceId: string, body: string): void {
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }
 
-export function incomingXmppStanza(deviceId: string, body: string): void {
-  if (!DEBUG_FILE) return;
+export function incomingXmppStanza(
+  deviceId: string,
+  body: string,
+  trace = false,
+): void {
+  if (!DEBUG_FILE && !trace) return;
   const now = new Date();
   const msg = {
     event: "incoming XMPP stanza",
@@ -231,9 +236,5 @@ export function incomingXmppStanza(deviceId: string, body: string): void {
     body: body,
   };
 
-  if (DEBUG_FORMAT === "yaml")
-    appendFileSync(DEBUG_FILE, "---\n" + stringify(msg));
-  else if (DEBUG_FORMAT === "json")
-    appendFileSync(DEBUG_FILE, JSON.stringify(msg) + "\n");
-  else throw new Error(`Unrecognized DEBUG_FORMAT option`);
+  emit(msg, trace);
 }

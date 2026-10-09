@@ -1,4 +1,7 @@
 *~
 node_modules
 dist
+.dev
+config/config.json
+config/provisions/inform.js
 docs/_build

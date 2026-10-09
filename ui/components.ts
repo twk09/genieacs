@@ -18,6 +18,8 @@ import allParameters from "./components/all-parameters.ts";
 import deviceActions from "./components/device-actions.ts";
 import tags from "./components/tags.ts";
 import ping from "./components/ping.ts";
+import debugTrace from "./components/debug-trace.ts";
+import kpiChart from "./components/kpi-chart.ts";
 import deviceLink from "./components/device-link.ts";
 import longTextComponent from "./components/long-text-component.ts";
 import loading from "./components/loading.ts";
@@ -34,6 +36,8 @@ const comps: Record<string, ComponentTypes<any>> = {
   "device-actions": deviceActions,
   tags,
   ping,
+  "debug-trace": debugTrace,
+  "kpi-chart": kpiChart,
   "device-link": deviceLink,
   "long-text": longTextComponent,
   loading: loading,

@@ -1,0 +1,28 @@
+- label: "'Serial number'"
+  parameter: DeviceID.SerialNumber
+  type: "'device-link'"
+  components:
+    - type: "'parameter'"
+- label: "'Product class'"
+  parameter: DeviceID.ProductClass
+- label: "'Software version'"
+  parameter: Device.DeviceInfo.SoftwareVersion
+- label: "'IP'"
+  parameter: Device.IP.Interface.2.IPv4Address.1.IPAddress
+- label: "'SSID 2.4Ghz'"
+  parameter: Device.WiFi.SSID.1.SSID
+- label: "'SSID 5Ghz'"
+  parameter: Device.WiFi.SSID.2.SSID
+- element: "'span.inform'"
+  label: "'Last inform'"
+  parameter: DATE_STRING(Events.Inform)
+  type: "'container'"
+  components:
+    - type: "'parameter'"
+    - chart: "'online'"
+      type: "'overview-dot'"
+- label: "'Tags'"
+  parameter: Tags
+  type: "'tags'"
+  unsortable: true
+  writable: false

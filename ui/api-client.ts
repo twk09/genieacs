@@ -2,6 +2,7 @@ import Expression from "../lib/common/expression.ts";
 import Path from "../lib/common/path.ts";
 import { Task } from "../lib/types.ts";
 import { PingResult } from "../lib/ping.ts";
+import type { Trace } from "../lib/db/types.ts";
 import * as notifications from "./notifications.ts";
 import { configSnapshot, genieacsVersion } from "./config.ts";
 import { getClockSkew } from "./skewed-date.ts";
@@ -366,6 +367,84 @@ export async function ping(
   signal?: AbortSignal,
 ): Promise<PingResult> {
   const res = await request(`/api/ping/${encodeURIComponent(host)}`, {
+    signal,
+  });
+  return res.json();
+}
+
+export interface TraceEntry extends Omit<
+  Trace,
+  "_id" | "timestamp" | "expire"
+> {
+  _id: string;
+  timestamp: string;
+}
+
+export async function getTraces(
+  deviceId: string,
+  since: number,
+  signal?: AbortSignal,
+): Promise<TraceEntry[]> {
+  // live=1 keeps the server capturing this device's traffic for a few more seconds
+  const res = await request(`/api/traces/${encodeURIComponent(deviceId)}`, {
+    params: { since: String(since), live: "1" },
+    signal,
+  });
+  return res.json();
+}
+
+export async function stopTraces(deviceId: string): Promise<void> {
+  await request(`/api/traces/${encodeURIComponent(deviceId)}`, {
+    method: "DELETE",
+  });
+}
+
+export interface KpiSeries {
+  metric: string;
+  instance: string;
+  band: string;
+  unit: string;
+  kind: "gauge" | "counter";
+  points: [number, number][];
+}
+
+export interface KpiResult {
+  resolution: "raw" | "hour" | "day";
+  series: KpiSeries[];
+}
+
+export async function getKpis(
+  deviceId: string,
+  from: number,
+  to: number,
+  signal?: AbortSignal,
+): Promise<KpiResult> {
+  const res = await request(`/api/kpi/${encodeURIComponent(deviceId)}`, {
+    params: { from: String(from), to: String(to) },
+    signal,
+  });
+  return res.json();
+}
+
+export interface FleetKpiOverview {
+  totalDevices: number;
+  onlineDevices: number;
+  productClasses: { productClass: string; devices: number; online: number }[];
+  metrics: string[];
+  metric: string;
+  unit: string;
+  resolution: "5m" | "15m" | "hour" | "day";
+  series: { productClass: string; points: [number, number][] }[];
+}
+
+export async function getFleetKpis(
+  metric: string,
+  from: number,
+  to: number,
+  signal?: AbortSignal,
+): Promise<FleetKpiOverview> {
+  const res = await request("/api/kpi-overview", {
+    params: { metric, from: String(from), to: String(to) },
     signal,
   });
   return res.json();

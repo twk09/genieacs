@@ -1,0 +1,21 @@
+{
+  "UI_JWT_SECRET": "",
+  "UI_AUTH_ENABLED": true,
+  "KPI_QUERY_INTERVAL_SECONDS": 300,
+  "INFORM_USERNAME": "",
+  "INFORM_PASSWORD": "",
+  "GRAFANA_DASHBOARD_URL": "",
+
+  "LDAP_ENABLED": false,
+  "LDAP_URL": "ldaps://ldap.example.com:636",
+  "LDAP_START_TLS": false,
+  "LDAP_TLS_REJECT_UNAUTHORIZED": true,
+  "LDAP_TIMEOUT": 5000,
+  "LDAP_BIND_DN": "cn=service,dc=example,dc=com",
+  "LDAP_BIND_PASSWORD": "",
+  "LDAP_USER_BASE_DN": "ou=people,dc=example,dc=com",
+  "LDAP_USER_FILTER": "(uid={username})",
+  "LDAP_GROUP_ATTRIBUTE": "memberOf",
+  "LDAP_ROLE_MAP": "cn=acs-admins,ou=groups,dc=example,dc=com=>admin",
+  "LDAP_DEFAULT_ROLES": ""
+}

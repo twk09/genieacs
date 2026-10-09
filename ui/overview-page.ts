@@ -4,6 +4,8 @@ import Expression from "../lib/common/expression.ts";
 import { renderView } from "./views.ts";
 import { createPieChart } from "./pie-chart-component.ts";
 import { div, h1, h2 } from "./dom.ts";
+import { createMithrilHost, m as mithril } from "./mithril-compat.ts";
+import kpiOverview from "./components/kpi-overview.ts";
 
 const GROUPS = overview.groups;
 const CHARTS: typeof overview.charts = {};
@@ -49,8 +51,10 @@ export function createPage(): HTMLElement {
     }
   }
 
+  const fleetOverview = createMithrilHost(() => mithril(kpiOverview, {}));
+
   // Reactive child: reads all count signals, rebuilds charts when data arrives
-  return div({}, () => {
+  return div({}, fleetOverview, () => {
     const groupElements: Node[] = [];
 
     for (const group of GROUPS) {

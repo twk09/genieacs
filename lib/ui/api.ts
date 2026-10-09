@@ -1,5 +1,6 @@
 import { Readable } from "node:stream";
 import Router from "@koa/router";
+import { queryFleetKpis, queryKpi } from "../kpi-store.ts";
 import { ObjectId } from "mongodb";
 import * as db from "./db.ts";
 import * as apiFunctions from "../api-functions.ts";
@@ -17,6 +18,7 @@ import { stringify as yamlStringify } from "../common/yaml.ts";
 import { ResourceLockedError } from "../common/errors.ts";
 import { acquireLock, releaseLock } from "../lock.ts";
 import { collections } from "../db/db.ts";
+import { renewTraceLease, releaseTraceLease } from "../trace-lease.ts";
 
 const router = new Router();
 export default router;
@@ -809,6 +811,135 @@ router.post("/devices/:id/tags", async (ctx) => {
 
   logger.accessInfo(log);
 
+  ctx.body = "";
+});
+
+router.get("/traces/:id", async (ctx) => {
+  const authorizer: Authorizer = ctx.state.authorizer;
+  const log = { message: "Query traces", context: ctx, id: ctx.params.id };
+  const live = singleParam(ctx.query.live ?? "") === "1";
+
+  // Capturing traffic changes device handling so it needs write access
+  if (!authorizer.hasAccess("devices", live ? 3 : 2)) {
+    logUnauthorizedWarning(log);
+    return void (ctx.status = 403);
+  }
+
+  const filter = Expression.and(
+    authorizer.getFilter("devices", 2),
+    new Expression.Binary(
+      "=",
+      new Expression.Parameter(Path.parse(RESOURCE_IDS.devices)),
+      new Expression.Literal(ctx.params.id),
+    ),
+  );
+  const { value: device } = await db.query("devices", filter).next();
+  if (!device) return void (ctx.status = 404);
+
+  if (live) await renewTraceLease(ctx.params.id);
+
+  const since = Number(singleParam(ctx.query.since ?? "")) || 0;
+  const limit = Math.min(
+    Number(singleParam(ctx.query.limit ?? "")) || 200,
+    500,
+  );
+  const query = {
+    device: ctx.params.id,
+    timestamp: { $gt: new Date(since) },
+  };
+
+  // Without a cursor return the most recent entries
+  if (!since) {
+    const latest = await collections.traces
+      .find(query)
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .toArray();
+    ctx.body = latest.reverse();
+    return;
+  }
+
+  ctx.body = await collections.traces
+    .find(query)
+    .sort({ timestamp: 1 })
+    .limit(limit)
+    .toArray();
+});
+
+router.get("/kpi/:id", async (ctx) => {
+  const authorizer: Authorizer = ctx.state.authorizer;
+  const log = { message: "Query KPIs", context: ctx, id: ctx.params.id };
+
+  if (!authorizer.hasAccess("devices", 2)) {
+    logUnauthorizedWarning(log);
+    return void (ctx.status = 403);
+  }
+
+  const filter = Expression.and(
+    authorizer.getFilter("devices", 2),
+    new Expression.Binary(
+      "=",
+      new Expression.Parameter(Path.parse(RESOURCE_IDS.devices)),
+      new Expression.Literal(ctx.params.id),
+    ),
+  );
+  const { value: device } = await db.query("devices", filter).next();
+  if (!device) return void (ctx.status = 404);
+  if (device["Tags.kpi-disabled"])
+    return void (ctx.body = { resolution: "raw", series: [] });
+
+  const now = Date.now();
+  const fromValue = singleParam(ctx.query.from ?? "");
+  const toValue = singleParam(ctx.query.to ?? "");
+  let from = fromValue ? Number(fromValue) : now - 24 * 60 * 60 * 1000;
+  let to = toValue ? Number(toValue) : now;
+
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+    ctx.status = 400;
+    ctx.body = "Invalid KPI time range";
+    return;
+  }
+
+  to = Math.min(to, now);
+  from = Math.max(from, to - 365 * 24 * 60 * 60 * 1000);
+  ctx.body = await queryKpi(ctx.params.id, from, to);
+});
+
+router.get("/kpi-overview", async (ctx) => {
+  const authorizer: Authorizer = ctx.state.authorizer;
+  if (!authorizer.hasAccess("devices", 1)) {
+    logUnauthorizedWarning({ message: "Query KPI overview" });
+    return void (ctx.status = 403);
+  }
+
+  const now = Date.now();
+  const fromValue = singleParam(ctx.query.from ?? "");
+  const toValue = singleParam(ctx.query.to ?? "");
+  let from = fromValue ? Number(fromValue) : now - 24 * 60 * 60 * 1000;
+  let to = toValue ? Number(toValue) : now;
+
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+    ctx.status = 400;
+    ctx.body = "Invalid KPI time range";
+    return;
+  }
+
+  to = Math.min(to, now);
+  from = Math.max(from, to - 365 * 24 * 60 * 60 * 1000);
+  const metric = singleParam(ctx.query.metric ?? "");
+  ctx.body = await queryFleetKpis(
+    authorizer.getFilter("devices", 1),
+    metric,
+    from,
+    to,
+  );
+});
+
+router.delete("/traces/:id", async (ctx) => {
+  const authorizer: Authorizer = ctx.state.authorizer;
+  if (!authorizer.hasAccess("devices", 3)) return void (ctx.status = 403);
+  await releaseTraceLease(ctx.params.id);
+  await collections.traces.deleteMany({ device: ctx.params.id });
   ctx.body = "";
 });
 
