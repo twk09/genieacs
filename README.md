@@ -1,5 +1,9 @@
 # GenieACS
 
+This repository is a fork of the original [GenieACS project](https://github.com/genieacs/genieacs).
+It preserves the upstream project and license while adding deployment-specific
+development; changes here may diverge from upstream.
+
 **This is the development branch for GenieACS v1.3. It is unstable and not ready
 for production use. For the latest stable release, see the
 [v1.2 branch](https://github.com/genieacs/genieacs/tree/v1.2).**
