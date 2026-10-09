@@ -117,6 +117,21 @@ configuration values, so use them only on trusted networks and stop capture when
 finished. LDAP and KPI retention options are documented in
 `docs/environment-variables.rst`.
 
+## Security Workflow
+
+`.github/workflows/devsecops.yml` runs Gitleaks over the full Git history,
+CodeQL for JavaScript/TypeScript, Trivy filesystem checks, and Dependency Review
+for pull requests. Dependency Review requires GitHub's dependency graph; private
+repositories need the corresponding GitHub Advanced Security entitlement.
+Gitleaks v3 may also require `GITLEAKS_LICENSE` for organization-owned repos.
+
+ZAP is opt-in because this repository does not define a staging deployment. Run
+the workflow manually from GitHub Actions and provide an HTTPS `staging_url` to
+scan. The license scanner is enabled, but no allow/deny license policy is set;
+define one after agreeing which SPDX licenses this fork accepts.
+The current production dependency audit reports existing high-severity findings,
+so the Trivy HIGH/CRITICAL gate will remain red until those are fixed.
+
 ## Support
 
 The [forum](https://forum.genieacs.com) is a good place to get guidance and help
