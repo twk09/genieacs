@@ -117,6 +117,57 @@ configuration values, so use them only on trusted networks and stop capture when
 finished. LDAP and KPI retention options are documented in
 `docs/environment-variables.rst`.
 
+## Systemd From Source
+
+On Linux with systemd, generate units using the absolute location of this
+checkout and the Node executable running the generator:
+
+```bash
+npm ci
+npm run build
+node generate-systemd.mjs --user thiago
+systemd-analyze verify .dev/systemd/*.service
+```
+
+Replace `thiago` with an existing non-root service account. The default is the
+current user. The generator requires an existing `config/config.json`; configure
+MongoDB, enable UI authentication, and set a private `UI_JWT_SECRET` before
+deployment. It does not create a configuration or copy secrets into units.
+The account must be able to traverse the installation directories, execute Node,
+read `dist/` and `config/`, and write any configured log/upload directories.
+Prefer a stable system-wide Node path rather than a version-manager path.
+
+The four units are written to `.dev/systemd/`. Override paths with `--root`,
+`--config-dir`, `--node`, or `--output`; use `--help` for usage. MongoDB must be
+managed separately (local or remote); these units do not start it. Logs default
+to the journal unless redirected by your configuration.
+
+Run the privileged installation commands yourself after reviewing the units:
+
+```bash
+./stop-dev.sh
+sudo install -m 0644 .dev/systemd/genieacs-*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
+systemctl status genieacs-ui
+journalctl -u genieacs-ui -f
+```
+
+Do not run `start-dev.sh` alongside these services: they bind the same ports.
+For updates, stop the systemd services before rebuilding because the build
+replaces `dist/`, then start them again:
+
+```bash
+sudo systemctl stop genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
+git pull --ff-only
+npm ci
+npm run build
+sudo systemctl start genieacs-cwmp genieacs-nbi genieacs-fs genieacs-ui
+```
+
+If the installation or Node location changes, regenerate and reinstall the
+units, run `systemctl daemon-reload`, and restart the services.
+
 ## Security Workflow
 
 `.github/workflows/devsecops.yml` runs Gitleaks over the full Git history,

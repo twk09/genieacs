@@ -43,6 +43,15 @@ Install GenieACS
   with custom patches, refer to README.md file in the source package. Adjust
   the next steps below accordingly.
 
+  This fork includes ``generate-systemd.mjs`` for source deployments. After
+  building and configuring ``config/config.json``, run
+  ``node generate-systemd.mjs --user <service-account>`` to generate four units
+  with the checkout's absolute path and the current Node executable. The
+  account must exist and be non-root. Units are written to ``.dev/systemd/``;
+  the generator does not install, enable, or restart services. See the
+  ``Systemd From Source`` section in README.md for validation, installation,
+  permissions, and update commands. MongoDB remains independently managed.
+
 Configure systemd
 -----------------
 
