@@ -13,6 +13,7 @@ if [[ ! -d "$ROOT_DIR/node_modules" ]]; then
 fi
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
+"$ROOT_DIR/stop-dev.sh"
 NODE_ENV=development npm --prefix "$ROOT_DIR" run build
 
 CONFIG_DIR="$ROOT_DIR/config"

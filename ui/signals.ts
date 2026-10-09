@@ -1,6 +1,8 @@
 // Reactive signals system based on the TC39 Signals proposal.
 // https://github.com/tc39/proposal-signals
 
+import "./runtime-compat.ts";
+
 export const enum ComputedState {
   Clean,
   Computing,

@@ -1,3 +1,4 @@
+import "./runtime-compat.ts";
 import { createLayout } from "./layout.ts";
 import * as store from "./legacy-store.ts";
 import { invalidate } from "./reactive-store.ts";
