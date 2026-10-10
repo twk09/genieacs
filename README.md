@@ -117,12 +117,17 @@ configuration values, so use them only on trusted networks and stop capture when
 finished. LDAP and KPI retention options are documented in
 `docs/environment-variables.rst`.
 
-UI task submissions have a 180-second HTTP timeout; ordinary API requests retain
-the 30-second default. The UI backend waits up to 120 seconds for the CWMP session
-to end after it starts. These waits are independent of `cwmp.sessionTimeout`,
-which defaults to 30 seconds of CWMP inactivity. A UI timeout does not prove that
-the CPE stopped communicating; check the CWMP access log and task status before
-retrying. Increasing `cwmp.sessionTimeout` does not extend the UI/backend waits.
+UI and NBI task submissions wait up to 10 minutes for the CWMP session to end
+after it starts. The API socket timeout and CWMP connection lifetime limit are
+11 minutes; the browser's task request timeout is 12 minutes to allow additional
+time for session initiation and server processing. Ordinary UI API requests
+retain the 30-second default. Reverse proxies and external NBI clients must also
+allow long-running task requests (for example, a 12-minute proxy read timeout).
+These waits are independent of `cwmp.sessionTimeout`, which defaults to 30 seconds
+of CWMP inactivity, and `cwmp.maxCommitIterations`. A UI timeout does not prove
+that the CPE stopped communicating; check the CWMP access log and task status
+before retrying. Increasing `cwmp.sessionTimeout` does not extend the UI/backend
+waits. These task wait limits are currently defined in code, not Admin Config.
 
 ## Systemd From Source
 

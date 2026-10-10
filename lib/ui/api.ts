@@ -655,7 +655,7 @@ router.post("/devices/:id/tasks", async (ctx) => {
   const socketTimeout = ctx.socket.timeout ?? 0;
 
   // Extend socket timeout while waiting for session
-  if (socketTimeout) ctx.socket.setTimeout(300000);
+  if (socketTimeout) ctx.socket.setTimeout(660000);
 
   const token = await acquireLock(`cwmp_session_${deviceId}`, 5000, 30000);
   if (!token) {
@@ -742,7 +742,7 @@ router.post("/devices/:id/tasks", async (ctx) => {
     if (!sessionStarted) {
       status = "No contact from CPE";
     } else {
-      const sessionEnded = await apiFunctions.awaitSessionEnd(deviceId, 120000);
+      const sessionEnded = await apiFunctions.awaitSessionEnd(deviceId, 600000);
       if (!sessionEnded) status = "Session took too long to complete";
     }
   }

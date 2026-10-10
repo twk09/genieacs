@@ -311,7 +311,7 @@ async function handler(
       const socketTimeout = request.socket.timeout ?? 0;
 
       // Extend socket timeout while waiting for session
-      if (socketTimeout) request.socket.setTimeout(300000);
+      if (socketTimeout) request.socket.setTimeout(660000);
 
       const token = await acquireLock(`cwmp_session_${deviceId}`, 5000, 30000);
       if (!token) {
@@ -392,7 +392,7 @@ async function handler(
         } else {
           const sessionEnded = await apiFunctions.awaitSessionEnd(
             deviceId,
-            120000,
+            600000,
           );
           if (!sessionEnded) {
             status = "Task queued but not processed";
