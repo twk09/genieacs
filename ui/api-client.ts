@@ -267,7 +267,7 @@ export async function postTasks(
 
   const res = await request(
     `/api/devices/${encodeURIComponent(deviceId)}/tasks`,
-    { method: "POST", body: tasks2 },
+    { method: "POST", body: tasks2, timeout: 180000 },
   );
   const connectionRequestStatus = res.headers.get("Connection-Request");
   const st = await res.json();

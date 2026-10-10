@@ -117,6 +117,13 @@ configuration values, so use them only on trusted networks and stop capture when
 finished. LDAP and KPI retention options are documented in
 `docs/environment-variables.rst`.
 
+UI task submissions have a 180-second HTTP timeout; ordinary API requests retain
+the 30-second default. The UI backend waits up to 120 seconds for the CWMP session
+to end after it starts. These waits are independent of `cwmp.sessionTimeout`,
+which defaults to 30 seconds of CWMP inactivity. A UI timeout does not prove that
+the CPE stopped communicating; check the CWMP access log and task status before
+retrying. Increasing `cwmp.sessionTimeout` does not extend the UI/backend waits.
+
 ## Systemd From Source
 
 On Linux with systemd, generate units using the absolute location of this
