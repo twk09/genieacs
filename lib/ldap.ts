@@ -1,5 +1,5 @@
 import { Client, InvalidCredentialsError } from "ldapts";
-import type { Entry } from "ldapts";
+import type { ClientOptions, Entry } from "ldapts";
 import * as config from "./config.ts";
 import * as logger from "./logger.ts";
 
@@ -51,17 +51,32 @@ function getRoles(entry: Entry): string[] {
   return Array.from(roles);
 }
 
+export function clientOptionsForUrl(
+  url: string,
+  timeout: number,
+  rejectUnauthorized: boolean,
+): ClientOptions {
+  const options: ClientOptions = {
+    url,
+    timeout,
+    connectTimeout: timeout,
+  };
+
+  if (new URL(url).protocol === "ldaps:")
+    options.tlsOptions = { rejectUnauthorized };
+
+  return options;
+}
+
 async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
   const timeout = config.get("LDAP_TIMEOUT") as number;
   const rejectUnauthorized = config.get(
     "LDAP_TLS_REJECT_UNAUTHORIZED",
   ) as boolean;
-  const client = new Client({
-    url: String(config.get("LDAP_URL")),
-    timeout,
-    connectTimeout: timeout,
-    tlsOptions: { rejectUnauthorized },
-  });
+  const url = String(config.get("LDAP_URL"));
+  const client = new Client(
+    clientOptionsForUrl(url, timeout, rejectUnauthorized),
+  );
 
   try {
     if (config.get("LDAP_START_TLS"))
